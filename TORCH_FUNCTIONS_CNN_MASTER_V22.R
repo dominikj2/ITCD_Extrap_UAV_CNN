@@ -229,9 +229,9 @@ XYZWHR_TO_VERT_FUN  <- function(XYZWHRT_Data = oneTriShp, Base_WL = 0.5, Normali
     if(BB == 1){ 
       Cent_X <- XYZWHRT_Data[,which(colnames(XYZWHRT_Data) == "X_Base")]
       Cent_Y <- XYZWHRT_Data[,which(colnames(XYZWHRT_Data) == "Y_Base")]
-      Length_Y <- Base_WL
-      Width_X <-Base_WL
-      Rotate_Deg <-0
+      Length_Y <- torch_tensor(Base_WL)$to(device=device)
+      Width_X <- torch_tensor(Base_WL)$to(device=device)
+      Rotate_Deg <- torch_tensor(0)$to(device=device)
       Height <-XYZWHRT_Data[,which(colnames(XYZWHRT_Data) == "Z_Base")]
     }else{
       
@@ -250,7 +250,7 @@ XYZWHR_TO_VERT_FUN  <- function(XYZWHRT_Data = oneTriShp, Base_WL = 0.5, Normali
       
     }
     
-    Rotate_Deg <- deg2rad(Rotate_Deg)
+    Rotate_Deg <- Rotate_Deg$deg2rad # deg2rad(Rotate_Deg)
     
     # translate point to origin
     tempX <- c(Cent_X-(0.5*Width_X), Cent_X-(0.5*Width_X), Cent_X+(0.5*Width_X),  Cent_X+(0.5*Width_X))
@@ -322,9 +322,9 @@ XYZWHR_TO_VERT_GPU_FUN  <- function(XYZWHRT_Data = oneTriShp, Base_WL = 0.5, Nor
     if(BB == 1){ 
       Cent_X <- XYZWHRT_Data[1] # Cent_X <- XYZWHRT_Data[,which(colnames(XYZWHRT_Data) == "X_Base")]
       Cent_Y <- XYZWHRT_Data[2] # Cent_Y <- XYZWHRT_Data[,which(colnames(XYZWHRT_Data) == "Y_Base")]
-      Length_Y <- Base_WL
-      Width_X <-Base_WL
-      Rotate_Deg <-0
+      Length_Y <- torch_tensor(Base_WL)$to(device=device)
+      Width_X <-torch_tensor(Base_WL)$to(device=device)
+      Rotate_Deg <-torch_tensor(0)$to(device=device)
       Height <-XYZWHRT_Data[3] # Height <-XYZWHRT_Data[,which(colnames(XYZWHRT_Data) == "Z_Base")]
     }else{
       # browser()
@@ -344,19 +344,18 @@ XYZWHR_TO_VERT_GPU_FUN  <- function(XYZWHRT_Data = oneTriShp, Base_WL = 0.5, Nor
       #print("normalise OK2")
     }
     #print("deg2rad OK")
-    Rotate_Deg <- deg2rad(Rotate_Deg)  # DOM DOM DOM !!! TORCH HAS $deg2rad
+    #browser()
+    Rotate_Deg <- Rotate_Deg$deg2rad() # deg2rad(Rotate_Deg)  # DOM DOM DOM !!! TORCH HAS $deg2rad
     #print("deg2rad OK2")
-    
-   
-    
+
     
     # translate point to origin
     tempX <- torch_stack(c(Cent_X-(0.5*Width_X), Cent_X-(0.5*Width_X), Cent_X+(0.5*Width_X),  Cent_X+(0.5*Width_X)))
     tempY <- torch_stack(c(Cent_Y-(0.5*Length_Y), Cent_Y+ (0.5*Length_Y), Cent_Y+(0.5*Length_Y), Cent_Y- (0.5*Length_Y)))
     
     # Cent_Xs <- torch_repeat_interleave(Cent_X, torch_tensor(dim(tempX)[1]))
-    tempX = tempX - Cent_X # c(tempX,Cent_X) #- Cent_X;
-    tempY = tempY - Cent_Y # c(tempY,Cent_Y) #- Cent_Y;
+    tempX2 = torch_sub(tempX, other=Cent_X) # c(tempX,Cent_X) #- Cent_X;
+    tempY2 = torch_sub(tempY, other=Cent_Y) # c(tempY,Cent_Y) #- Cent_Y;
     
     # now apply rotation
     #print("sin OK")
@@ -368,14 +367,14 @@ XYZWHR_TO_VERT_GPU_FUN  <- function(XYZWHRT_Data = oneTriShp, Base_WL = 0.5, Nor
     # print("tempY")
     # print(torch_sin(Rotate_Deg))
     # print("torch_sin")
-    rotatedX = tempX*torch_squeeze(torch_cos(Rotate_Deg)) - tempY*torch_squeeze(torch_sin(Rotate_Deg));
-    rotatedY = tempX*torch_squeeze(torch_sin(Rotate_Deg)) + tempY*torch_squeeze(torch_cos(Rotate_Deg));
+    rotatedX = tempX2*torch_squeeze(torch_cos(Rotate_Deg)) - tempY2*torch_squeeze(torch_sin(Rotate_Deg));
+    rotatedY = tempX2*torch_squeeze(torch_sin(Rotate_Deg)) + tempY2*torch_squeeze(torch_cos(Rotate_Deg));
     #print("sin OK2")
     #browser()
     # translate back
     xNew <- torch_squeeze(torch_add(rotatedX,Cent_X))
     YNew <- torch_squeeze(torch_add(rotatedY,Cent_Y))
-    Rep_Cnt <- torch_tensor(dim(tempX)[1])$to(dtype = torch_long(), device = device) # $to(device = device)
+    Rep_Cnt <- torch_tensor(dim(tempX2)[1])$to(dtype = torch_long(), device = device) # $to(device = device)
     ZNew <- torch_squeeze(torch_repeat_interleave(torch_unsqueeze(Height, dim=1), Rep_Cnt)) # $to(device = device)
     # browser()
     #print("T3")
@@ -407,7 +406,7 @@ XYZWHR_TO_VERT_GPU_FUN  <- function(XYZWHRT_Data = oneTriShp, Base_WL = 0.5, Nor
   
   # ADD THE VERY TOP BOX
   Rep_Cnt <- torch_tensor(dim(tempX)[1])$to(dtype = torch_long())$to(device = device)
-  ZNew <- torch_squeeze(torch_repeat_interleave(torch_unsqueeze(Height, dim=1), Rep_Cnt)) # $to(device = device)
+  ZNew <- torch_squeeze(torch_repeat_interleave(torch_unsqueeze(Tree_Height, dim=1), Rep_Cnt)) # $to(device = device)
   XYZ <- torch_stack(c(xNew, YNew, ZNew), dim=2)
   # XYZ$Z <- Tree_Height 
   #print("XYZ")
@@ -646,14 +645,14 @@ XYZWLHR_To_Goffset_FUN <- function(Input_XYZWLHR, Prior_XYZWLHR, Plot_Output = "
 XYZWLHR_To_Goffset_GPU_FUN <- function(Input_XYZWLHR, Prior_XYZWLHR, Plot_Output = "No", Normalised = "Yes", Para_Cnt = Para_Cnt, use_Tensor = "Yes", Batch_Count){
   
   if(Para_Cnt == 16){
-    Index_Z <- torch_tensor(c(3, 8, 14, 16), dtype = torch_long())     
-    Index_XY <- torch_tensor(c(1,2), dtype = torch_long())
-    Index_X_Box <- torch_tensor(c(4,10), dtype = torch_long())      
-    Index_Y_Box <- torch_tensor(c(5,11), dtype = torch_long())    
-    Index_L <- torch_tensor(c(6,12), dtype = torch_long())            
-    Index_W <- torch_tensor(c(7,13), dtype = torch_long())            
-    Index_R <- torch_tensor(c(9, 15), dtype = torch_long())                
-    Index_all_Order <- torch_tensor(order(c(3, 8, 14, 16, 1, 2, 4, 10, 5, 11, 6, 12, 7, 13, 9, 15)), dtype = torch_long()) 
+    Index_Z <- torch_tensor(c(3, 8, 14, 16), dtype = torch_long(), device=device)     
+    Index_XY <- torch_tensor(c(1,2), dtype = torch_long(), device=device)
+    Index_X_Box <- torch_tensor(c(4,10), dtype = torch_long(), device=device)      
+    Index_Y_Box <- torch_tensor(c(5,11), dtype = torch_long(), device=device)    
+    Index_L <- torch_tensor(c(6,12), dtype = torch_long(), device=device)            
+    Index_W <- torch_tensor(c(7,13), dtype = torch_long(), device=device)            
+    Index_R <- torch_tensor(c(9, 15), dtype = torch_long(), device=device)                
+    Index_all_Order <- torch_tensor(order(c(3, 8, 14, 16, 1, 2, 4, 10, 5, 11, 6, 12, 7, 13, 9, 15)), dtype = torch_long(), device=device) 
     # Colnames_XYZWLHR <- c("X_Base", "Y_Base", "Z_Base", 
     #                       "X_BotBox", "Y_BotBox", "L_BotBox", "W_BotBox", "Z_BotBox", "R_BotBox", 
     #                       "X_TopBox", "Y_TopBox", "L_TopBox", "W_TopBox", "Z_TopBox ", "R_TopBox", 
@@ -666,24 +665,24 @@ XYZWLHR_To_Goffset_GPU_FUN <- function(Input_XYZWLHR, Prior_XYZWLHR, Plot_Output
     #browser()
     if(use_Tensor == "Yes"){
       #1"X_Base", 2"Y_Base", 3"Z_Base", 4"X_TopBox", 5"Y_TopBox", 6"L_TopBox", 7"W_TopBox", 8"Z_TopBox", 9"R_TopBox",  10"Z_TopTree"
-      Index_Z <- torch_tensor(c(3,  8, 10), dtype = torch_long())
-      Index_XY <- torch_tensor(c(1,2), dtype = torch_long())
-      Index_X_Box <- torch_tensor(c(4), dtype = torch_long())
-      Index_Y_Box <- torch_tensor(c(5), dtype = torch_long())
-      Index_L <- torch_tensor(c(6), dtype = torch_long())
-      Index_W <- torch_tensor(c(7), dtype = torch_long())
-      Index_R <- torch_tensor(c( 9), dtype = torch_long())
-      Index_all_Order <- torch_tensor(order(c(3, 8, 10, 1,2,  4,   5, 6,  7,  9)), dtype = torch_long())
+      Index_Z <- torch_tensor(c(3,  8, 10), dtype = torch_long(), device=device)
+      Index_XY <- torch_tensor(c(1,2), dtype = torch_long(), device=device)
+      Index_X_Box <- torch_tensor(c(4), dtype = torch_long(), device=device)
+      Index_Y_Box <- torch_tensor(c(5), dtype = torch_long(), device=device)
+      Index_L <- torch_tensor(c(6), dtype = torch_long(), device=device)
+      Index_W <- torch_tensor(c(7), dtype = torch_long(), device=device)
+      Index_R <- torch_tensor(c( 9), dtype = torch_long(), device=device)
+      Index_all_Order <- torch_tensor(order(c(3, 8, 10, 1,2,  4,   5, 6,  7,  9)), dtype = torch_long(), device=device)
       
     }else{
-      Index_Z <- torch_tensor(c(3, 14, 16), dtype = torch_long())
-      Index_XY <- torch_tensor(c(1,2), dtype = torch_long())
-      Index_X_Box <- torch_tensor(c( 10), dtype = torch_long())
-      Index_Y_Box <- torch_tensor(c(11), dtype = torch_long())
-      Index_L <- torch_tensor(c(12), dtype = torch_long())
-      Index_W <- torch_tensor(c(13), dtype = torch_long())
-      Index_R <- torch_tensor(c( 15), dtype = torch_long())
-      Index_all_Order <- torch_tensor(order(c(3, 14, 16,  1, 2, 10,  11, 12,  13,  15)), dtype = torch_long())
+      Index_Z <- torch_tensor(c(3, 14, 16), dtype = torch_long(), device=device)
+      Index_XY <- torch_tensor(c(1,2), dtype = torch_long(), device=device)
+      Index_X_Box <- torch_tensor(c( 10), dtype = torch_long(), device=device)
+      Index_Y_Box <- torch_tensor(c(11), dtype = torch_long(), device=device)
+      Index_L <- torch_tensor(c(12), dtype = torch_long(), device=device)
+      Index_W <- torch_tensor(c(13), dtype = torch_long(), device=device)
+      Index_R <- torch_tensor(c( 15), dtype = torch_long(), device=device)
+      Index_all_Order <- torch_tensor(order(c(3, 14, 16,  1, 2, 10,  11, 12,  13,  15)), dtype = torch_long(), device=device)
     }
     
     # Colnames_XYZWLHR <- c("X_Base", "Y_Base", "Z_Base", 
@@ -814,35 +813,35 @@ XYZWLHR_To_Goffset_GPU_FUN <- function(Input_XYZWLHR, Prior_XYZWLHR, Plot_Output
 Goffset_To_XYZWLHR_FUN <- function(Input_XYZWLHR_GOffset, Prior_XYZWLHR, Para_Cnt = Para_Cnt, use_Tensor = "Yes"){
 
   if(Para_Cnt == 16){
-    Index_Z <- torch_tensor(c(3, 8, 14, 16), dtype = torch_long())
-    Index_XY <- torch_tensor(c(1,2), dtype = torch_long())
-    Index_X_Box <- torch_tensor(c(4,10), dtype = torch_long())
-    Index_Y_Box <- torch_tensor(c(5,11), dtype = torch_long())
-    Index_L <- torch_tensor(c(6,12), dtype = torch_long())
-    Index_W <- torch_tensor(c(7,13), dtype = torch_long())
-    Index_R <- torch_tensor(c(9, 15), dtype = torch_long())
-    Index_all_Order <- torch_tensor(order(c(3, 8, 14, 16, 1, 2, 4, 10,  5, 11, 6, 12, 7, 13, 9, 15)), dtype = torch_long())
+    Index_Z <- torch_tensor(c(3, 8, 14, 16), dtype = torch_long(), device=device)
+    Index_XY <- torch_tensor(c(1,2), dtype = torch_long(), device=device)
+    Index_X_Box <- torch_tensor(c(4,10), dtype = torch_long(), device=device)
+    Index_Y_Box <- torch_tensor(c(5,11), dtype = torch_long(), device=device)
+    Index_L <- torch_tensor(c(6,12), dtype = torch_long(), device=device)
+    Index_W <- torch_tensor(c(7,13), dtype = torch_long(), device=device)
+    Index_R <- torch_tensor(c(9, 15), dtype = torch_long(), device=device)
+    Index_all_Order <- torch_tensor(order(c(3, 8, 14, 16, 1, 2, 4, 10,  5, 11, 6, 12, 7, 13, 9, 15)), dtype = torch_long(), device=device)
 
   }else{
     if(use_Tensor == "Yes"){
       #1"X_Base", 2"Y_Base", 3"Z_Base", 4"X_TopBox", 5"Y_TopBox", 6"L_TopBox", 7"W_TopBox", 8"Z_TopBox", 9"R_TopBox",  10"Z_TopTree"
-      Index_Z <- torch_tensor(c(3, 8, 10), dtype = torch_long())
-      Index_XY <- torch_tensor(c(1,2), dtype = torch_long())
-      Index_X_Box <- torch_tensor(c(4), dtype = torch_long())
-      Index_Y_Box <- torch_tensor(c(5), dtype = torch_long())
-      Index_L <- torch_tensor(c(6), dtype = torch_long())
-      Index_W <- torch_tensor(c(7), dtype = torch_long())
-      Index_R <- torch_tensor(c(9), dtype = torch_long())
-      Index_all_Order <- torch_tensor(order(c(3, 8, 10, 1, 2, 4,  5, 6,  7,  9)), dtype = torch_long())
+      Index_Z <- torch_tensor(c(3, 8, 10), dtype = torch_long(), device=device)
+      Index_XY <- torch_tensor(c(1,2), dtype = torch_long(), device=device)
+      Index_X_Box <- torch_tensor(c(4), dtype = torch_long(), device=device)
+      Index_Y_Box <- torch_tensor(c(5), dtype = torch_long(), device=device)
+      Index_L <- torch_tensor(c(6), dtype = torch_long(), device=device)
+      Index_W <- torch_tensor(c(7), dtype = torch_long(), device=device)
+      Index_R <- torch_tensor(c(9), dtype = torch_long(), device=device)
+      Index_all_Order <- torch_tensor(order(c(3, 8, 10, 1, 2, 4,  5, 6,  7,  9)), dtype = torch_long(), device=device)
     }else{
-      Index_Z <- torch_tensor(c(3, 14, 16), dtype = torch_long())
-      Index_XY <- torch_tensor(c(1,2), dtype = torch_long())
-      Index_X_Box <- torch_tensor(c(10), dtype = torch_long())
-      Index_Y_Box <- torch_tensor(c(11), dtype = torch_long())
-      Index_L <- torch_tensor(c(12), dtype = torch_long())
-      Index_W <- torch_tensor(c(13), dtype = torch_long())
-      Index_R <- torch_tensor(c( 15), dtype = torch_long())
-      Index_all_Order <- torch_tensor(order(c( 3, 14, 16, 1, 2, 10, 11, 12,  13,  15)), dtype = torch_long())
+      Index_Z <- torch_tensor(c(3, 14, 16), dtype = torch_long(), device=device)
+      Index_XY <- torch_tensor(c(1,2), dtype = torch_long(), device=device)
+      Index_X_Box <- torch_tensor(c(10), dtype = torch_long(), device=device)
+      Index_Y_Box <- torch_tensor(c(11), dtype = torch_long(), device=device)
+      Index_L <- torch_tensor(c(12), dtype = torch_long(), device=device)
+      Index_W <- torch_tensor(c(13), dtype = torch_long(), device=device)
+      Index_R <- torch_tensor(c( 15), dtype = torch_long(), device=device)
+      Index_all_Order <- torch_tensor(order(c( 3, 14, 16, 1, 2, 10, 11, 12,  13,  15)), dtype = torch_long(), device=device)
     }
   }
 
@@ -1235,8 +1234,8 @@ NMS_LOSS_FUN <- function(    Empty_Vox, Triangles_ID_All_Mx, Para_Threshold_IoU,
 SCALE_PLOT2RoI_VERT_GPU_FUN <- function(RoI_Dec, XYZWLHR, OUT_VERT_or_XYZWLHR = "XYZWLHR", batch=b, Para_Cnt = 10, use_Tensor = "Yes", Para_Base_WL = 0.5, Para_Target_Base=16,
                                     Col_Name = Colnames_XYZWLHR, Normalise= "Yes"){
   RoI_XYZWLHR_T = list()
+  
   for(r in 1:RoI_Dec$size(2)){  # dim(RoI_Dec)[2]
-
     # XYZWLHR_Vert <- as.data.frame(XYZWHR_TO_VERT_GPU_FUN(XYZWLHR[r,], Base_WL = Para_Base_WL/Para_Target_Base)) #  GPU
     XYZWLHR_Vert <- XYZWHR_TO_VERT_GPU_FUN(XYZWLHR[r,], Base_WL = Para_Base_WL/Para_Target_Base) #  GPU
     
@@ -1257,21 +1256,22 @@ SCALE_PLOT2RoI_VERT_GPU_FUN <- function(RoI_Dec, XYZWLHR, OUT_VERT_or_XYZWLHR = 
     y_New <-  (y_oneP-yyB)/(yyT-yyB)
     z_oneP <- XYZWLHR_Vert[,3] #$Z                                   # Z_Base Z_BotBox Z_TopBox Z_TopTree  c(3, 8, 14, 16)
     z_New <-  (z_oneP-zzB)/(zzT-zzB)
-    #XYZWLHR_Vert_New <- as.matrix(data.frame(X =x_New, Y = y_New, Z = z_New)) 
-    XYZWLHR_Vert_New <- torch_stack(c(x_New, y_New, z_New), dim=2)$to(device = "cpu")
-    XYZWLHR_Vert_New <- as.array(XYZWLHR_Vert_New) 
-
-    oneXYZWLHR_Vert_New1 <- cbind(BBOX_PNTS_FUN(XYZWLHR_Vert_New[1:4,1:2])[-5,], rep(XYZWLHR_Vert_New[1,3],4))
-    oneXYZWLHR_Vert_New2 <- cbind(BBOX_PNTS_FUN(XYZWLHR_Vert_New[5:8,1:2])[-5,], rep(XYZWLHR_Vert_New[5,3],4))
-    oneXYZWLHR_Vert_New3 <- cbind(BBOX_PNTS_FUN(XYZWLHR_Vert_New[9:12,1:2])[-5,], rep(XYZWLHR_Vert_New[9,3],4))
-
-    # oneXYZWLHR_Vert_New1 <- torch_stack(c(oneXYZWLHR_Vert_New1[-5,], Z = rep(XYZWLHR_Vert_New[1,3],4)), dim=2)
-    # oneXYZWLHR_Vert_New2 <- BBOX_PNTS_FUN(XYZWLHR_Vert_New[5:8,1:2])[-5,]
-    # oneXYZWLHR_Vert_New2 <- torch_stack(c(oneXYZWLHR_Vert_New2, Z = rep(XYZWLHR_Vert_New[5,3],4)), dim=2)
-    # oneXYZWLHR_Vert_New3 <- BBOX_PNTS_FUN(XYZWLHR_Vert_New[9:12,1:2])[-5,]
-    # oneXYZWLHR_Vert_New3 <- torch_stack(c(oneXYZWLHR_Vert_New3[-5,], Z = rep(XYZWLHR_Vert_New[9,3],4)), dim=2)
     
-    XYZWLHR_Vert_NewBox <- torch_tensor(rbind(oneXYZWLHR_Vert_New1, oneXYZWLHR_Vert_New2, oneXYZWLHR_Vert_New3 ), device = device) # $to(device = device)
+    XYZWLHR_Vert_NewBox <- torch_stack(c(x_New, y_New, z_New), dim=2)$to(device = device)
+    
+    # DOM DOM DOM !!! 12/08/2021 REMOVING SORT VERTICES TO TEST OUT ALGORITHM WITHOUT BREAKING 
+    
+    #XYZWLHR_Vert_New <- as.matrix(data.frame(X =x_New, Y = y_New, Z = z_New)) 
+    #XYZWLHR_Vert_New <- torch_stack(c(x_New, y_New, z_New), dim=2)$to(device = "cpu")
+    #
+    #
+    # XYZWLHR_Vert_New <- as.array(XYZWLHR_Vert_New) 
+    # browser()
+    # oneXYZWLHR_Vert_New1 <- cbind(BBOX_PNTS_FUN(XYZWLHR_Vert_New[1:4,1:2])[-5,], rep(XYZWLHR_Vert_New[1,3],4))
+    # oneXYZWLHR_Vert_New2 <- cbind(BBOX_PNTS_FUN(XYZWLHR_Vert_New[5:8,1:2])[-5,], rep(XYZWLHR_Vert_New[5,3],4))
+    # oneXYZWLHR_Vert_New3 <- cbind(BBOX_PNTS_FUN(XYZWLHR_Vert_New[9:12,1:2])[-5,], rep(XYZWLHR_Vert_New[9,3],4))
+    # 
+    # XYZWLHR_Vert_NewBox <- torch_tensor(rbind(oneXYZWLHR_Vert_New1, oneXYZWLHR_Vert_New2, oneXYZWLHR_Vert_New3 ), device = device) # $to(device = device)
 
     
     if(OUT_VERT_or_XYZWLHR == "Vert"){
@@ -3480,8 +3480,8 @@ VERT_To_XYZWLHR_GPU_FUN  <- function(Vertices, Para_Cnt = 10, Col_Name= Colnames
     oneLevel_Vertices <- Vertices[Index,]
     # browser()
     if(L == 1){
-      Centre_X <- mean(oneLevel_Vertices[,1]) #mean(oneLevel_Vertices$X) 
-      Centre_Y <- mean(oneLevel_Vertices[,2]) # mean(oneLevel_Vertices$Y) 
+      Centre_X <- torch_mean(oneLevel_Vertices[,1]) #mean(oneLevel_Vertices$X) 
+      Centre_Y <- torch_mean(oneLevel_Vertices[,2]) # mean(oneLevel_Vertices$Y) 
       Centre_Z <- oneLevel_Vertices[1,3] # oneLevel_Vertices$Z[1]
       #browser()
       BBox <- torch_stack(c(Centre_X, Centre_Y, Centre_Z)) # data.frame(X= Centre_X, Y =Centre_Y, Z =Centre_Z)
@@ -3511,9 +3511,9 @@ VERT_To_XYZWLHR_GPU_FUN  <- function(Vertices, Para_Cnt = 10, Col_Name= Colnames
         # onePSID_BBox <- oneLevel_Vertices[,2:4]
         
         # ORDER POINTS SO MOST X VALUE IS FIRST
-        Ord_First <- as.array(torch_argmin(oneLevel_Vertices[,1])$to(device = "cpu")) # which.min(oneLevel_Vertices$X)
+        Ord_First <- as.array(torch_argmin(oneLevel_Vertices[,1])$to(device = "cpu")) # which.min(oneLevel_Vertices$X)  ### TORCH ERROR
         if(Ord_First != 1){
-          oneLevel_Vertices <- oneLevel_Vertices[c(Ord_First:dim(oneLevel_Vertices)[1], 1:(Ord_First-1)),]
+          oneLevel_Vertices <- oneLevel_Vertices[c(Ord_First:dim(oneLevel_Vertices)[1], 1:(Ord_First-1)),]  ### TORCH ERROR
         }
         #oneLevel_Vertices$Order <- 1:(dim(oneLevel_Vertices)[1])
         # browser()
@@ -3549,8 +3549,8 @@ VERT_To_XYZWLHR_GPU_FUN  <- function(Vertices, Para_Cnt = 10, Col_Name= Colnames
 
         # browser()
         dL = oneLevel_Vertices_N[2:3,3] -oneLevel_Vertices_N[1:2,3]
-        X = cos(oneLevel_Vertices_N[2:3,2]*pi/180)*sin(dL*pi/180) # =COS(39.099912*pi/180)
-        Y = (cos(oneLevel_Vertices_N[1:2,2]*pi/180)*sin(oneLevel_Vertices_N[2:3,2]*pi/180)) - (sin(oneLevel_Vertices_N[1:2,2]*pi/180)*cos(oneLevel_Vertices_N[2:3,2]*pi/180)*cos(dL*pi/180))
+        X = torch_cos(oneLevel_Vertices_N[2:3,2]*pi/180)*torch_sin(dL*pi/180) # =COS(39.099912*pi/180)
+        Y = (torch_cos(oneLevel_Vertices_N[1:2,2]*pi/180)*torch_sin(oneLevel_Vertices_N[2:3,2]*pi/180)) - (torch_sin(oneLevel_Vertices_N[1:2,2]*pi/180)*torch_cos(oneLevel_Vertices_N[2:3,2]*pi/180)*torch_cos(dL*pi/180))
 
         bearing_rad <- torch_atan2(X,Y)
         bearing_deg <- (bearing_rad *180)/3.14159265359
@@ -3580,8 +3580,8 @@ VERT_To_XYZWLHR_GPU_FUN  <- function(Vertices, Para_Cnt = 10, Col_Name= Colnames
         # }
         
         # browser()
-        BoxCent_X <- mean(oneLevel_Vertices[,1])
-        BoxCent_Y <- mean(oneLevel_Vertices[,2])
+        BoxCent_X <- torch_mean(oneLevel_Vertices[,1])
+        BoxCent_Y <- torch_mean(oneLevel_Vertices[,2])
         Box_Z <- oneLevel_Vertices[1,3]
         # browser()
         All_BBox<- torch_cat(c(All_BBox, torch_unsqueeze(BoxCent_X,1), 

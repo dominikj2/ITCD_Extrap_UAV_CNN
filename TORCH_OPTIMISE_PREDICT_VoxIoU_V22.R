@@ -367,7 +367,7 @@ for (epoch in Start_Epoch:Para_num_epochs) {
   # BATCH LOOP  # ITERATE OVER TRAINING BATCHES
   ############
   ##############################################################################################################################################################################################
-
+  
   model_Instance$train()
   
   # browser()
@@ -504,7 +504,7 @@ for (epoch in Start_Epoch:Para_num_epochs) {
     cat(sprintf("Epoch %d, VALIDATE: loss_MULTI_TASK:%3f, loss_VOX_IoU: %3f, loss_CONFIDENCE: %3f,  loss_XYZWLHR: %3f\n",
                 epoch, mean(valid_loss_MULTI_TASK), mean(valid_loss_VOX_IoU), mean(valid_loss_CONFIDENCE), mean(valid_loss_XYZWLHR)))
   }
-
+  browser()
   EpochMean_train_loss_XYZWLHR <- c(EpochMean_train_loss_XYZWLHR, mean(train_loss_XYZWLHR))
   EpochMean_train_loss_CONFIDENCE <- c(EpochMean_train_loss_CONFIDENCE, mean(train_loss_CONFIDENCE))
   EpochMean_train_loss_VOX_IoU <- c(EpochMean_train_loss_VOX_IoU, mean(train_loss_VOX_IoU))
@@ -563,7 +563,7 @@ for (epoch in Start_Epoch:Para_num_epochs) {
       }
     }
   
-  Index_Best_Valid <- which(EpochMean_valid_loss_MULTI_TASK == min(EpochMean_valid_loss_MULTI_TASK))
+  Index_Best_Valid <- which(EpochMean_valid_loss_MULTI_TASK %in% min(EpochMean_valid_loss_MULTI_TASK))
   if(length(Index_Best_Valid) > 0){
     if(Index_Best_Valid == length(EpochMean_valid_loss_MULTI_TASK)){
       Valid_Output$Epoch  <- epoch

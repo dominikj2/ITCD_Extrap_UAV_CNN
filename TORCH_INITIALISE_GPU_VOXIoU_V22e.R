@@ -145,7 +145,7 @@ RoI_Transition <- nn_module(
       ##################################################################
       # SCALING ExtP (TARGET_XYZWLH and PRIOR_XYZWLH) to ExtR (i.e. 0-1)
       ##################################################################
-      #browser()
+      # browser()
       TARGET_XYZWLHR_oneP_allR_ExtP <- TARGET_XYZWLHR_ExtP[p,,]
       # TARGET_XYZWLHR_oneP_allR_ExtP_DF <- as.data.frame(as.array(TARGET_XYZWLHR_oneP_allR_ExtP))  # GPU
       # colnames(TARGET_XYZWLHR_oneP_allR_ExtP_DF) <- Colnames_XYZWLHR  # GPU
@@ -157,7 +157,7 @@ RoI_Transition <- nn_module(
                                                                Para_Cnt = Para_TriShpParaCnt, 
                                                                use_Tensor = "Yes",
                                                                Col_Name= Colnames_XYZWLHR)   # GPU
-
+      
       PRIOR_XYZWLHR_oneP_allR_ExtP <- PRIOR_XYZWLHR_ExtP[p,,]
       # PRIOR_XYZWLHR_oneP_allR_ExtP_DF <- as.data.frame(as.array(PRIOR_XYZWLHR_oneP_allR_ExtP))   # GPU
       # colnames(PRIOR_XYZWLHR_oneP_allR_ExtP_DF) <- Colnames_XYZWLHR   # GPU
@@ -200,6 +200,7 @@ RoI_Transition <- nn_module(
       # DECODING TARGET_XYZWLHR_oneP_allR_ExtR INTO OFFSET REPRESENTATION     # NOTE: PREDICTIONS ARE OFFSETS (RELATIVE TO RESPECTIVE PRIORS), SO TARGETS NEED TO BE CONVERTED TO OFFSETS (FOR LAS PROCEDURE).... WORKING WITH RoI EXTENT MEASURES...
       ##############################################################
       # browser()
+
       ACTUAL_Goffset_oneP_allR_ExtR <- XYZWLHR_To_Goffset_GPU_FUN(TARGET_XYZWLHR_oneP_allR_ExtR, PRIOR_XYZWLHR_oneP_allR_ExtR, Plot_Output = "No", 
                                                                  Normalised = "Yes", Para_Cnt = Para_TriShpParaCnt, use_Tensor = "Yes") #, Batch_Count   # GPU
       #print("DONE: XYZWLHR_To_Goffset_GPU_FUN")
@@ -229,7 +230,7 @@ RoI_Transition <- nn_module(
         oneTID = TARGET_TID[p,r]   ### THE MODEL WILL HAVE TO RUN WITHOUT "TARGET_TID"
         
         # GET Vox ID FOR BOT AND TOP (XYZ)
-        Vox_oneR = RoI_Vox[p,r,]$to(device="cpu")
+        Vox_oneR = RoI_Vox[p,r,] # $to(device="cpu")
 
         xxB <- as.array(Vox_oneR[2])
         xxT <- as.array(Vox_oneR[3])
@@ -242,6 +243,8 @@ RoI_Transition <- nn_module(
         # RoI MaxPOOL OF TENSOR (16*16*40 WITH CHANNELS IN 2nd AXIS) INTO RoI (8*8*16)   
         ##############################################################################
         # browser()
+        #x_Conv$gather(2, index)
+        
         Conv_oneR_ExtR <- torch_squeeze(self$Pool3D(x_Conv[p,, (xxB:xxT), (yyB:yyT), (zzB:zzT)]))   # CHANGED FOR TORCH_0.4
         Conv_allR_ExtR <- list.append(Conv_allR_ExtR, Conv_oneR_ExtR)
 
@@ -258,7 +261,7 @@ RoI_Transition <- nn_module(
         Mask_oneR_ExtR <- torch_squeeze(self$Pool3D(VMask_oneR_ExtP[,(xxB:xxT),  (yyB:yyT),  (zzB:zzT)]) )   # CHANGED FOR TORCH_0.4
         Mask_allR_ExtR <- list.append(Mask_allR_ExtR, Mask_oneR_ExtR)
       } # RoI LOOP
-     
+
       ############################################
       # STACK ALL PLOTS ExtR (VoxDen, Conv & Mask)
       ############################################
@@ -271,6 +274,19 @@ RoI_Transition <- nn_module(
       Mask_oneP_allR_ExtR <- torch_stack(Mask_allR_ExtR) 
       Mask_allP_allR_ExtR <- list.append(Mask_allP_allR_ExtR, Mask_oneP_allR_ExtR)
     
+      
+      browser()
+      
+      # x.gather(2, index)
+      # 
+      # t = torch_tensor(c(1, 2, 3, 4))$view(c(2,2))
+      # u = torch_tensor(c(1, 1, 2, 1), dtype=torch_int())$view(c(2,2))
+      # torch_gather(t, 1, u)
+      # 
+      # torch_gather(t, 2, u)
+      # Input and index have same dimensions (eac dimension needs representation)
+      # ouput has same shape as index
+      
       ####################################################################################################################################################
       ######################################
       # OUTPUT FOR MASK AND IoU COMPUTATION (not using yet)
@@ -676,7 +692,7 @@ MultiTaskLoss <- nn_module(
     return(multi_task_losses)
   }
 )
-
+# browser()
 # FUNCTION FOR WEIGHTED MSE LOSS
 weighted_mse_loss <- function(input, target, weight){
   mse_loss_W  <-  torch_mean(weight * (input - target) ** 2)
@@ -690,11 +706,10 @@ mse_loss <- function(input, target){
 
 # GENERATE MSE WEIGHTS 
 
-MSE_WEIGHTS_Temp <- torch_repeat_interleave(torch_unsqueeze(torch_tensor(as.array(Para_MSE_WEIGHTS)), 1)
+MSE_WEIGHTS_Temp <- torch_repeat_interleave(torch_unsqueeze(torch_tensor(as.array(Para_MSE_WEIGHTS), device=device), 1)
                                             , torch_tensor(as.integer(Para_min_Plot_Priors/2), device=device), dim = 1)
 MSE_WEIGHTS_T <- torch_repeat_interleave(torch_unsqueeze(MSE_WEIGHTS_Temp, 1), 
                                          torch_tensor(as.integer(batch_size), device=device), dim = 1)
-
 
 Loss_Module <- nn_module(
   "Loss_Module",
@@ -718,23 +733,55 @@ Loss_Module <- nn_module(
  
     TARGET_Prior_Type <- torch_unsqueeze(TARGET_IoU_SUMMARY[,,19], 3)
 
-    Index_PosPriors_Array <- which(as.array(TARGET_Prior_Type$view(c(-1))$to(device="cpu")) ==1)
+    #Index_PosPriors_Array <- which(as.array(TARGET_Prior_Type$view(c(-1))$to(device="cpu")) ==1)  # (THIS HAS NON TENSOR PROCEDURES ... NEEDS ADDRESSING!!!!!)
+    Index_PosPriors_Array <-(TARGET_Prior_Type$view(c(-1)) == 1)$nonzero()$squeeze()  # (as_tuple=False)
     PRED_Goffset_allP_allR_ExtR_View <- PRED_Goffset_allP_allR_ExtR$view(c(-1,Para_TriShpParaCnt ))
     PRED_Goffset_allP_allR_ExtR_View_Pos <- PRED_Goffset_allP_allR_ExtR_View[Index_PosPriors_Array,]
     ACTUAL_Goffset_allP_allR_ExtR_View <- ACTUAL_Goffset_allP_allR_ExtR$view(c(-1,Para_TriShpParaCnt ))
     ACTUAL_Goffset_allP_allR_ExtR_View_Pos <- ACTUAL_Goffset_allP_allR_ExtR_View[Index_PosPriors_Array,]
 
     if(RUN_CIoU_BINARY_LEVEL2 == "Yes"){ # RUN CIoU LOSS
-      #browser()
-      ### DOM DOM DOM THIS IS WHERE YOU GENERATE THE CIoU LOSS
-      source(paste(FOLDER_TORCH_CODE, "TORCH_CIoU",Version_RCode,".R", sep="")) 
 
-      CIoU <- CIoU_GPU_FUN(TARGET_XYZWLHR_allP_allR_ExtR, PRIOR_XYZWLHR_allP_allR_ExtR, PRED_Goffset_allP_allR_ExtR,  
-                                     TARGET_IoU_SUMMARY,  INPUT_RoI_Dec, TARGET_Prior_Type, Binary_Score,
-                                     Para_Target_Base, Para_Target_Z_Height, Para_TriShpParaCnt, Para_Base_WL,
-                                     Batch_Count_T, epoch_T)
+
+      # TARGET_XYZWLHR_allP_allR_ExtR 12 64 10
+      # PRIOR_XYZWLHR_allP_allR_ExtR  12 64 10
+      # PRED_Goffset_allP_allR_ExtR   12 64 10
+      # TARGET_IoU_SUMMARY            12 64 20
+      # INPUT_RoI_Dec                 12 64  7
+      # TARGET_Prior_Type             12 64  1
+      # Binary_Score                  12 64  1
+      
+      # Colnames_XYZWLHR <- c("X_Base", "Y_Base", "Z_Base",
+      #                       "X_TopBox", "Y_TopBox", "L_TopBox", "W_TopBox", "Z_TopBox", "R_TopBox",
+      #                       "Z_TopTree")
+      # Colnames_XYZWLHR[c(4,5,8,6,7,10,9)]
+      # (x,y,z,w,l,h,alpha)
+      # browser()  # x.add_(y)
+      
+      TARGET_xyzwlhr_ciou <-  torch_clone(TARGET_XYZWLHR_allP_allR_ExtR[,,c(4,5,8,6,7,10,9)])
+      #TARGET_Test <- TARGET_XYZWLHR_allP_allR_ExtR[,,c(4,5,8,6,7,10,9)]
+      TARGET_xyzwlhr_h <- TARGET_xyzwlhr_ciou[,,6]- TARGET_xyzwlhr_ciou[,,3]
+      TARGET_xyzwlhr_ciou[,,6] <- TARGET_xyzwlhr_h
+      
+      PRED_xyzwlhr_ciou <-  torch_clone(PRED_Goffset_allP_allR_ExtR[,,c(4,5,8,6,7,10,9)])
+      #TARGET_Test <- TARGET_XYZWLHR_allP_allR_ExtR[,,c(4,5,8,6,7,10,9)]
+      PRED_xyzwlhr_h <- PRED_xyzwlhr_ciou[,,6]- PRED_xyzwlhr_ciou[,,3]
+      PRED_xyzwlhr_ciou[,,6] <- PRED_xyzwlhr_h
+
+
+
+      ### DOM DOM DOM THIS IS WHERE YOU GENERATE THE CIoU LOSS
+      Output_IoU = cal_complete_iou_3d(PRED_xyzwlhr_ciou, TARGET_xyzwlhr_ciou, enclosing_type ="smallest")
+      iou_loss <- Output_IoU[[1]] 
+      iou <- Output_IoU[[2]]
+      CIoU_Loss <- torch_mean(iou_loss)
+      Loc_Loss_Positive <- CIoU_Loss
+      # CIoU <- CIoU_GPU_FUN(TARGET_XYZWLHR_allP_allR_ExtR, PRIOR_XYZWLHR_allP_allR_ExtR, PRED_Goffset_allP_allR_ExtR,  
+      #                                TARGET_IoU_SUMMARY,  INPUT_RoI_Dec, TARGET_Prior_Type, Binary_Score,
+      #                                Para_Target_Base, Para_Target_Z_Height, Para_TriShpParaCnt, Para_Base_WL,
+      #                                Batch_Count_T, epoch_T)
       # browser()
-      CIoU_Loss <- torch_mean(CIoU)
+     
       # allP_VoxFScore_posPredGT_T <- allP_FSCORE_Output[[1]]
       # loss_1min_VoxFScore <- allP_FSCORE_Output[[2]]
       # Loc_Loss_Positive <- 0
@@ -746,7 +793,6 @@ Loss_Module <- nn_module(
       Index_Size <- PRED_Goffset_allP_allR_ExtR$size(1)
       MSE_WEIGHTS_T <- MSE_WEIGHTS_T[1:Index_Size,,]
       MSE_WEIGHTS_T_view <- MSE_WEIGHTS_T$view(c(-1,Para_TriShpParaCnt))
-      
       Loc_Loss_Positive <- self$MSE_Weighted(PRED_Goffset_allP_allR_ExtR_View_Pos, ACTUAL_Goffset_allP_allR_ExtR_View_Pos, MSE_WEIGHTS_T_view)
     }
 
@@ -783,6 +829,11 @@ Loss_Module <- nn_module(
     TARGET_MASK_View_Pos <- TARGET_MASK_View[Index_PosPriors_Array,,,]
     
     IoU_IoUVox_Loss <- DICE_LOSS_FUN(IoUVox_Con_Prob_View_Pos, TARGET_MASK_View_Pos)
+    
+    #################################################################################################################################################################
+    ##############################################################################################################################################################################################################
+    
+    
     # browser()
     # if(RUN_MULTI_TASK_LEVEL > 2 ){ # | RUN_FSCORE_BINARY_LEVEL2 == "Yes"
     #   
@@ -896,14 +947,14 @@ RUN_MODEL_LOSS_FUN <- function(INPUT_LIST, TARGET_LIST, FLIGHT_PLOT_ID_LIST, epo
   TARGET_XYZWLHR_ExtP <- torch_clone(TARGET_LIST[[3]])#$to(device = device))$to(device = device)       # 16 64 10         # 64 GT XYZWLHR LOCATION (BEST ONE FOR EACH PRIOR???)
   TARGET_TID <- torch_clone(torch_squeeze(TARGET_LIST[[4]], 3))#$to(device = device))$to(device = device)  # 16 64      # 64 TARGET_TID REPRESENTING 64 GT XYZWLHR LOCATION (i.e. TARGET_XYZWLHR_ExtP)
 
-  FlightID_LIST <- FLIGHT_PLOT_ID_LIST[[1]] #as.array(FLIGHT_PLOT_ID_LIST[[1]])#$to(device = device)) 
-  PlotID_LIST <- FLIGHT_PLOT_ID_LIST[[2]]  #as.array(FLIGHT_PLOT_ID_LIST[[2]])#$to(device = device)) 
+  FlightID_LIST <- torch_clone(FLIGHT_PLOT_ID_LIST[[1]]) #as.array(FLIGHT_PLOT_ID_LIST[[1]])#$to(device = device)) 
+  PlotID_LIST <- torch_clone(FLIGHT_PLOT_ID_LIST[[2]])  #as.array(FLIGHT_PLOT_ID_LIST[[2]])#$to(device = device)) 
   DIR_LIST <- FLIGHT_PLOT_ID_LIST[[3]] #as.array(FLIGHT_PLOT_ID_LIST[[3]]) 
 
   ###########
   # RUN MODEL 
   ###########
-
+  #browser()
   OUTPUT_LIST <- model_Instance(INPUT_Vox_Den, INPUT_RoI_Vox, INPUT_RoI_Dec, INPUT_PRIOR_XYZWLHR_ExtP, TARGET_XYZWLHR_ExtP, TARGET_Vox_TID, TARGET_TID, TARGET_IoU_SUMMARY, epoch_T, Batch_Count_T) # p[[1]][[1]]  16 1 16 16 40    p[[1]][[2]]  16 64  7 p[[1]][[3]]  16 64 16 # OLD list(list(INPUT_VOX_DF, INPUT_GT, INPUT_ROI), INPUT_TARGET_ROI_AND_CLASS)
 
   ##################
